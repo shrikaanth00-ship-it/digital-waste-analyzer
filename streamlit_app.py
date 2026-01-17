@@ -5,10 +5,8 @@ from estimator import estimate_block_runtime, complexity_score
 from carbon import estimate_energy_and_co2
 from suggester import generate_suggestions, naive_apply_patch
 import base64
-import textwrap
 
 st.set_page_config(page_title="Digital Waste Analyzer", layout="wide")
-
 st.title("🌿 Digital Waste Analyzer — Code Carbon Checker (Prototype)")
 
 with st.sidebar:
@@ -16,8 +14,7 @@ with st.sidebar:
     st.markdown("""
     1. Upload a Python `.py` file or paste code.
     2. Click **Analyze**.
-    3. Review findings, suggested fixes, and estimated energy/CO₂.
-    4. Apply naive patches (optional) and download optimized file.
+    3. Review findings and suggestions.
     """)
     cpu_watts = st.number_input("Assumed CPU watts (for estimation)", value=15.0, step=1.0)
     carbon_intensity = st.number_input("Carbon intensity (g CO₂/kWh)", value=475.0, step=1.0)
@@ -38,88 +35,75 @@ if source_code is None:
     st.info("Upload a .py file or paste code to analyze.")
     st.stop()
 
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.subheader("Code")
-    st.code(source_code, language="python")
-
-with col2:
-    st.subheader("Actions")
-    if st.button("Analyze"):
+# Run analysis when user clicks
+if st.button("Analyze"):
+    # create engine and get findings
+    try:
         engine = RuleEngine(source_code)
         findings = engine.get_findings()
-        # 🚨 SAFETY CHECK: Stop if syntax error detected
-        if findings and findings[0]["rule_id"] == "SYNTAX_ERROR":
-            st.error("❌ Invalid Python syntax detected. Please fix your code and try again.")
-            st.code(findings[0]["snippet"])
-            st.stop()
-        # estimator
-        est_seconds = estimate_block_runtime(findings)
-        complexity = complexity_score(findings)
-        energy = estimate_energy_and_co2(est_seconds, cpu_watts=cpu_watts, carbon_intensity_g_per_kwh=carbon_intensity)
+    except Exception as e:
+        st.error("An unexpected error occurred during analysis.")
+        st.write("Error:", str(e))
+        st.stop()
 
-        # score (simple)
-        base = 100.0
-        penalty = complexity  # heuristic
-        final_score = max(0, base - penalty)
+    # Safety: if parser reported syntax error, show friendly message
+    if findings and findings[0].get("rule_id") == "SYNTAX_ERROR":
+        st.error("❌ Invalid Python syntax detected. Please fix your code and try again.")
+        st.code(findings[0].get("snippet", "Syntax error"))
+        st.stop()
+
+    # proceed with estimator and suggestions
+    est_seconds = estimate_block_runtime(findings)
+    complexity = complexity_score(findings)
+    energy = estimate_energy_and_co2(est_seconds, cpu_watts=cpu_watts, carbon_intensity_g_per_kwh=carbon_intensity)
+
+    base = 100.0
+    penalty = complexity
+    final_score = max(0, base - penalty)
+    if final_score >= 90:
         grade = "A+"
-        if final_score >= 90:
-            grade = "A+"
-        elif final_score >= 80:
-            grade = "A"
-        elif final_score >= 70:
-            grade = "B"
-        elif final_score >= 60:
-            grade = "C"
-        elif final_score >= 50:
-            grade = "D"
-        else:
-            grade = "F"
+    elif final_score >= 80:
+        grade = "A"
+    elif final_score >= 70:
+        grade = "B"
+    elif final_score >= 60:
+        grade = "C"
+    elif final_score >= 50:
+        grade = "D"
+    else:
+        grade = "F"
 
-        st.metric("Code Carbon Grade", grade)
-        st.write(f"Estimated runtime per run: **{est_seconds:.6f} s**")
-        st.write(f"Estimated energy per run: **{energy['kwh']:.8f} kWh**")
-        st.write(f"Estimated CO₂ per run: **{energy['co2_g']:.4f} g**")
-        st.write("**Findings**")
-        if not findings:
-            st.success("No issues detected by the rule engine (nice!).")
-        else:
-            for f in findings:
-                with st.expander(f"{f['rule_id']} | {f['severity'].upper()} | line {f['lineno']}"):
-                    st.write(f"**Snippet:** `{f['snippet']}`")
-                    st.write(f"**Message:** {f['message']}")
-                    st.write(f"**Suggestion:** {f['suggestion']}")
+    st.metric("Code Carbon Grade", grade)
+    st.write(f"Estimated runtime per run: **{est_seconds:.6f} s**")
+    st.write(f"Estimated energy per run: **{energy['kwh']:.8f} kWh**")
+    st.write(f"Estimated CO₂ per run: **{energy['co2_g']:.4f} g**")
 
-        st.write("---")
-        st.write("**Suggestions (templated)**")
-        suggs = generate_suggestions(findings)
-        if not suggs:
-            st.info("No template suggestions available.")
-        else:
-            for s in suggs:
-                st.markdown(f"**{s['rule_id']} — {s['title']}**")
-                st.code(s['suggestion'])
-                st.write("---")
+    st.write("**Findings**")
+    if not findings:
+        st.success("No issues detected.")
+    else:
+        for f in findings:
+            with st.expander(f"{f['rule_id']} | {f['severity'].upper()} | line {f.get('lineno')}"):
+                st.write(f"**Snippet:** `{f.get('snippet')}`")
+                st.write(f"**Message:** {f.get('message')}")
+                st.write(f"**Suggestion:** {f.get('suggestion')}")
 
-        # patched file
-        patched = naive_apply_patch(source_code, findings)
-        st.write("**Optimized (naive) file**")
-        st.code(patched, language="python")
+    st.write("---")
+    st.write("**Suggestions (templated)**")
+    suggs = generate_suggestions(findings)
+    if not suggs:
+        st.info("No template suggestions available.")
+    else:
+        for s in suggs:
+            st.markdown(f"**{s['rule_id']} — {s['title']}**")
+            st.code(s['suggestion'])
+            st.write("---")
 
-        # download button
-        b = patched.encode("utf-8")
-        b64 = base64.b64encode(b).decode()
-        href = f'<a href="data:file/text;base64,{b64}" download="optimized.py">Download optimized.py</a>'
-        st.markdown(href, unsafe_allow_html=True)
+    patched = naive_apply_patch(source_code, findings)
+    st.write("**Optimized (naive) file**")
+    st.code(patched, language="python")
 
-        # small comparison
-        st.write("### Estimated Impact (heuristic)")
-        runs = 1000
-        co2_per_run = energy["co2_g"]
-        st.write(f"CO₂ per run: {co2_per_run:.4f} g")
-        st.write(f"CO₂ for {runs} runs: {co2_per_run * runs:.2f} g ({(co2_per_run * runs)/1000:.3f} kg)")
-
-        # present simple before/after note (we didn't actually re-estimate patched code)
-        st.info("Note: The naive patcher adds inline suggestions/comments. For real impact, you'd replace code with optimized snippets. This prototype is conservative.")
-
+    b = patched.encode("utf-8")
+    b64 = base64.b64encode(b).decode()
+    href = f'<a href="data:file/text;base64,{b64}" download="optimized.py">Download optimized.py</a>'
+    st.markdown(href, unsafe_allow_html=True)
