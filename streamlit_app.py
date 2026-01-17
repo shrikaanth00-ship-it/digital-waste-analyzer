@@ -49,6 +49,11 @@ with col2:
     if st.button("Analyze"):
         engine = RuleEngine(source_code)
         findings = engine.get_findings()
+        # 🚨 SAFETY CHECK: Stop if syntax error detected
+        if findings and findings[0]["rule_id"] == "SYNTAX_ERROR":
+            st.error("❌ Invalid Python syntax detected. Please fix your code and try again.")
+            st.code(findings[0]["snippet"])
+            st.stop()
         # estimator
         est_seconds = estimate_block_runtime(findings)
         complexity = complexity_score(findings)
@@ -117,3 +122,4 @@ with col2:
 
         # present simple before/after note (we didn't actually re-estimate patched code)
         st.info("Note: The naive patcher adds inline suggestions/comments. For real impact, you'd replace code with optimized snippets. This prototype is conservative.")
+
