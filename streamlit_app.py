@@ -6,6 +6,32 @@ from carbon import estimate_energy_and_co2
 from suggester import generate_suggestions, naive_apply_patch
 import base64
 
+# -----------------------------
+# Human-readable impact helpers
+# -----------------------------
+
+def energy_to_human(kwh):
+    if kwh < 0.005:
+        return "Less than charging a smartphone for a few minutes"
+    elif kwh < 0.02:
+        return "Equivalent to running a laptop for about 20 minutes"
+    elif kwh < 0.1:
+        return "Equivalent to charging a smartphone once"
+    else:
+        return "Equivalent to running an LED bulb for several hours"
+
+
+def co2_to_human(co2_g):
+    if co2_g < 1:
+        return "Comparable to keeping a small LED bulb ON for a few minutes"
+    elif co2_g < 10:
+        return "Comparable to keeping a light ON for about 1 hour"
+    elif co2_g < 50:
+        return "Comparable to driving a petrol car for a short distance"
+    else:
+        return "Comparable to multiple everyday household activities"
+
+
 st.set_page_config(page_title="Digital Waste Analyzer", layout="wide")
 st.title("🌿 Digital Waste Analyzer — Code Carbon Checker (Prototype)")
 
@@ -77,6 +103,11 @@ if st.button("Analyze"):
     st.write(f"Estimated runtime per run: **{est_seconds:.6f} s**")
     st.write(f"Estimated energy per run: **{energy['kwh']:.8f} kWh**")
     st.write(f"Estimated CO₂ per run: **{energy['co2_g']:.4f} g**")
+    st.subheader("🌱 Human-Readable Environmental Impact")
+    st.write(f"🔌 **Energy Impact:** {energy_to_human(energy['kwh'])}")
+    st.write(f"🌍 **Carbon Impact:** {co2_to_human(energy['co2_g'])}")
+    st.caption("These equivalents are approximate and shown for intuitive understanding.")
+
 
     st.write("**Findings**")
     if not findings:
@@ -107,3 +138,4 @@ if st.button("Analyze"):
     b64 = base64.b64encode(b).decode()
     href = f'<a href="data:file/text;base64,{b64}" download="optimized.py">Download optimized.py</a>'
     st.markdown(href, unsafe_allow_html=True)
+
