@@ -6,11 +6,15 @@ from typing import List, Tuple, Dict, Any
 
 
 class CodeParser:
-    def __init__(self, source: str):
+      def __init__(self, source: str):
         self.source = source
-        self.tree = ast.parse(source)
-        # For mapping lineno to source lines:
-        self.lines = source.splitlines()
+        self.tree = None
+        self.syntax_error = None
+
+        try:
+            self.tree = ast.parse(source)
+        except SyntaxError as e:
+            self.syntax_error = str(e)
 
     def get_functions(self) -> List[ast.FunctionDef]:
         return [n for n in ast.walk(self.tree) if isinstance(n, ast.FunctionDef)]
@@ -99,3 +103,4 @@ def foo(arr, lst):
     print("Functions:", [f.name for f in p.get_functions()])
     print("For-loops:", [(n.lineno, p._get_line(n)) for n in p.get_for_loops()])
     print("File I/O calls:", p.get_file_io_calls())
+
