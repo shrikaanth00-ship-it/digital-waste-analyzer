@@ -30,6 +30,17 @@ class RuleFinding:
 class RuleEngine:
     def __init__(self, source: str):
         self.parser = CodeParser(source)
+        if self.parser.syntax_error:
+            self.findings = [{
+                "rule_id": "SYNTAX_ERROR",
+                "severity": "high",
+                "lineno": None,
+                "message": "Invalid Python syntax detected",
+                "snippet": self.parser.syntax_error,
+                "suggestion": "Please fix syntax errors before analysis."
+            }]
+    return
+
         self.findings: List[RuleFinding] = []
         self._run_all()
 
@@ -157,3 +168,4 @@ def report(items, other):
     engine = RuleEngine(demo)
     for f in engine.get_findings():
         print(f)
+
